@@ -1,18 +1,26 @@
 "use client";
 import { useState, useEffect } from "react";
-import { getVoterId } from "@/lib/voter";
 
 type Question = {
   id: string;
   body: string;
   author: string | null;
   votes: number;
+  userVote?: "up" | "down" | null;
+};
+
+type User = {
+  id: string;
+  email: string;
+  name: string;
 };
 
 export default function QuestionsList({
+  user,
   initialQuestions,
   initialHasMore,
 }: {
+  user: User;
   initialQuestions: Question[];
   initialHasMore: boolean;
 }) {
@@ -25,21 +33,22 @@ export default function QuestionsList({
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
 
-  // Debounced search: wait 300ms after typing stops; each keystroke cancels
-  // the previous timer, so "deploying" fires one request, not nine.
+  // Debounced search: fetch search results including voterId for vote checking
   useEffect(() => {
+    if (!hydrated) return;
+
     const id = setTimeout(async () => {
       const url = query
-        ? `/api/questions?q=${encodeURIComponent(query)}`
-        : `/api/questions`;
+        ? `/api/questions?q=${encodeURIComponent(query)}&voterId=${user.id}`
+        : `/api/questions?voterId=${user.id}`;
       const res = await fetch(url);
       const data = await res.json();
       setQuestions(data.questions);
       setHasMore(data.hasMore);
     }, 300);
 
-    return () => clearTimeout(id); // cancel the pending timer on each keystroke
-  }, [query]);
+    return () => clearTimeout(id);
+  }, [query, user.id, hydrated]);
 
   async function submit() {
     if (!draft.trim()) return;
@@ -47,37 +56,65 @@ export default function QuestionsList({
     const res = await fetch("/api/questions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body: draft }),
+      body: JSON.stringify({ body: draft, author: user.name }),
     });
     const created = await res.json();
 
-    setQuestions((qs) => [{ ...created, votes: 0 }, ...qs]);
+    setQuestions((qs) => [{ ...created, votes: 0, userVote: null }, ...qs]);
     setDraft("");
   }
 
-  async function upvote(id: string) {
-    // optimistic: assume success, update the UI now
+  async function handleVote(questionId: string, type: "up" | "down") {
+    const target = questions.find((q) => q.id === questionId);
+    if (!target) return;
+
+    const currentVote = target.userVote;
+    let nextVote: "up" | "down" | null = null;
+    let voteDiff = 0;
+
+    if (currentVote === type) {
+      nextVote = null;
+      voteDiff = type === "up" ? -1 : 1;
+    } else {
+      nextVote = type;
+      if (currentVote === null) {
+        voteDiff = type === "up" ? 1 : -1;
+      } else {
+        voteDiff = type === "up" ? 2 : -2;
+      }
+    }
+
+    // Optimistic UI Update
+    const previousQuestions = [...questions];
     setQuestions((qs) =>
-      qs.map((q) => (q.id === id ? { ...q, votes: q.votes + 1 } : q))
+      qs.map((q) =>
+        q.id === questionId
+          ? { ...q, votes: q.votes + voteDiff, userVote: nextVote }
+          : q
+      )
     );
 
-    const res = await fetch(`/api/questions/${id}/vote`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ voterId: getVoterId() }),
-    });
+    try {
+      const res = await fetch(`/api/questions/${questionId}/vote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ voterId: user.id, voteType: nextVote }),
+      });
 
-    // server said no (already voted) — roll back
-    if (!res.ok) {
-      setQuestions((qs) =>
-        qs.map((q) => (q.id === id ? { ...q, votes: q.votes - 1 } : q))
-      );
+      if (!res.ok) {
+        setQuestions(previousQuestions);
+        const data = await res.json();
+        alert(data.error || "Failed to cast vote.");
+      }
+    } catch (err) {
+      setQuestions(previousQuestions);
+      console.error("Error voting:", err);
     }
   }
 
   async function loadMore() {
     setLoading(true);
-    const res = await fetch(`/api/questions?offset=${questions.length}`);
+    const res = await fetch(`/api/questions?offset=${questions.length}&voterId=${user.id}`);
     const data = await res.json();
     setQuestions((qs) => [...qs, ...data.questions]);
     setHasMore(data.hasMore);
@@ -87,20 +124,20 @@ export default function QuestionsList({
   return (
     <div className="space-y-5">
       {/* Ask box */}
-      <div className="rounded-2xl border bg-surface p-4 shadow-sm">
+      <div className="rounded-2xl cyber-panel-cyan p-4">
         <div className="flex gap-2">
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submit()}
-            placeholder="Ask a question…"
-            className="flex-1 rounded-xl border bg-background px-4 py-2.5 text-sm outline-none placeholder:text-muted focus:border-brand"
+            placeholder="Transmit query to mainframe…"
+            className="flex-1 rounded-xl px-4 py-2.5 text-sm outline-none cyber-input"
           />
           <button
             onClick={submit}
-            className="rounded-xl bg-brand px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-strong"
+            className="rounded-xl bg-cyan px-5 py-2.5 text-sm font-bold text-black hover:bg-cyan-strong hover:shadow-[0_0_12px_rgba(0,240,255,0.4)] transition-all cursor-pointer font-mono uppercase tracking-wider"
           >
-            Ask
+            Transmit
           </button>
         </div>
       </div>
@@ -110,11 +147,11 @@ export default function QuestionsList({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search questions…"
-          className="w-full flex-1 rounded-xl border bg-surface px-4 py-2.5 text-sm outline-none placeholder:text-muted focus:border-brand"
+          placeholder="Filter logs by keyword…"
+          className="w-full flex-1 rounded-xl px-4 py-2.5 text-sm outline-none cyber-input"
         />
-        <span className="shrink-0 text-xs text-muted">
-          {hydrated ? "Interactive ✓" : "Loading interactivity…"}
+        <span className="shrink-0 text-[10px] text-muted font-bold font-mono uppercase tracking-wider">
+          {hydrated ? "[LINK: ONLINE]" : "[LINK: OFFLINE]"}
         </span>
       </div>
 
@@ -123,21 +160,48 @@ export default function QuestionsList({
         {questions.map((q) => (
           <li
             key={q.id}
-            className="flex items-start gap-3 rounded-2xl border bg-surface p-4 shadow-sm transition-shadow hover:shadow-md"
+            className="flex items-start gap-4 rounded-2xl cyber-panel-cyan p-4"
           >
-            <button
-              onClick={() => upvote(q.id)}
-              className="flex shrink-0 flex-col items-center gap-0.5 rounded-xl border px-3.5 py-2 text-brand transition-colors hover:border-brand hover:bg-brand-soft"
-            >
-              <span className="text-xs leading-none">▲</span>
-              <span className="text-sm font-semibold leading-none tabular-nums">
-                {q.votes}
+            {/* Score Control Component */}
+            <div className="flex shrink-0 flex-col items-center rounded-xl border border-cyan-500/10 bg-background/50 py-1.5 px-2">
+              <button
+                onClick={() => handleVote(q.id, "up")}
+                className={`p-1 rounded-lg transition-colors cursor-pointer ${
+                  q.userVote === "up"
+                    ? "text-cyan bg-cyan-soft shadow-[0_0_8px_rgba(0,240,255,0.2)]"
+                    : "text-muted hover:text-cyan hover:bg-cyan-soft/50"
+                }`}
+                title="Upvote"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M4 14h6v8h4v-8h6L12 4 4 14z" />
+                </svg>
+              </button>
+              <span className="text-xs font-black my-1 tabular-nums text-foreground leading-none font-mono">
+                {Math.max(0, q.votes)}
               </span>
-            </button>
+              <button
+                onClick={() => handleVote(q.id, "down")}
+                className={`p-1 rounded-lg transition-colors cursor-pointer ${
+                  q.userVote === "down"
+                    ? "text-brand bg-brand-soft shadow-[0_0_8px_rgba(255,0,85,0.2)]"
+                    : "text-muted hover:text-brand hover:bg-brand-soft/50"
+                }`}
+                title="Downvote"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M20 10h-6V2h-4v8H4l8 10 8-10z" />
+                </svg>
+              </button>
+            </div>
+
             <div className="min-w-0 flex-1 pt-0.5">
-              <p className="leading-snug">{q.body}</p>
+              <p className="leading-snug text-foreground/90 font-medium">{q.body}</p>
               {q.author && (
-                <p className="mt-1.5 text-xs text-muted">{q.author}</p>
+                <p className="mt-2 text-[10px] text-muted font-bold font-mono uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-500/40" />
+                  Sender: {q.author}
+                </p>
               )}
             </div>
           </li>
@@ -145,8 +209,8 @@ export default function QuestionsList({
       </ul>
 
       {questions.length === 0 && (
-        <p className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted">
-          No questions yet — be the first to ask.
+        <p className="rounded-2xl border border-dashed border-cyan-500/10 p-8 text-center text-sm font-mono text-muted uppercase tracking-wider bg-surface/30">
+          [No transmission logs detected]
         </p>
       )}
 
@@ -155,9 +219,9 @@ export default function QuestionsList({
           <button
             onClick={loadMore}
             disabled={loading}
-            className="rounded-xl border bg-surface px-5 py-2.5 text-sm font-medium transition-colors hover:border-brand hover:text-brand disabled:opacity-50"
+            className="rounded-xl border border-cyan-500/20 bg-surface/80 hover:bg-cyan-soft hover:border-cyan hover:text-cyan px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50 font-mono cursor-pointer"
           >
-            {loading ? "Loading…" : "Load more"}
+            {loading ? "Syncing..." : "Sync More logs"}
           </button>
         </div>
       )}

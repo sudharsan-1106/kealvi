@@ -1,23 +1,25 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: #f5f6fb;
-  --color-surface: #ffffff;
-  --color-foreground: #1a1a23;
-  --color-muted: #71717a;
-  --color-border: #e7e7f0;
+  --color-background: #05050b;
+  --color-surface: #0a0b12;
+  --color-foreground: #f0f3f8;
+  --color-muted: #808298;
+  --color-border: #181926;
 
-  --color-brand: #5b54e8;
-  --color-brand-strong: #4a43d6;
-  --color-brand-soft: #edecfd;
+  --color-brand: #ff0055;
+  --color-brand-strong: #d60047;
+  --color-brand-soft: rgba(255, 0, 85, 0.1);
+
+  --color-cyan: #00f0ff;
+  --color-cyan-strong: #00c6d4;
+  --color-cyan-soft: rgba(0, 240, 255, 0.1);
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @layer base {
-  /* Tailwind v4 defaults `border` to currentColor — pin it to the theme so
-     plain `border` utilities render a soft, intentional line. */
   *,
   ::before,
   ::after {
@@ -27,13 +29,15 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    /* subtle brand glow behind the header */
-    background-image: radial-gradient(
-      48rem 24rem at 50% -8rem,
-      color-mix(in oklab, var(--color-brand) 18%, transparent),
-      transparent 70%
-    );
-    background-repeat: no-repeat;
+    /* Futuristic Cyberpunk Scan Grid + Multi-colored Neon Glows */
+    background-image: 
+      linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+      radial-gradient(40rem 20rem at 50% -8rem, rgba(0, 240, 255, 0.15), transparent 70%),
+      radial-gradient(30rem 20rem at 50% 100%, rgba(255, 0, 85, 0.06), transparent 80%);
+    background-size: 24px 24px, 24px 24px, 100% 100%, 100% 100%;
+    background-repeat: repeat, repeat, no-repeat, no-repeat;
+    background-attachment: fixed;
   }
 
   ::selection {
@@ -44,7 +48,61 @@
   input:focus-visible,
   textarea:focus-visible,
   button:focus-visible {
-    outline: 2px solid color-mix(in oklab, var(--color-brand) 55%, transparent);
-    outline-offset: 2px;
+    outline: 2px solid var(--color-cyan);
+    outline-offset: 1px;
   }
+}
+
+/* Custom glowing borders and shadows for cyberpunk aesthetic */
+.cyber-panel-pink {
+  border: 1px solid rgba(255, 0, 85, 0.2);
+  background-color: rgba(10, 11, 18, 0.8);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 0 15px rgba(255, 0, 85, 0.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cyber-panel-cyan {
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  background-color: rgba(10, 11, 18, 0.8);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cyber-panel-pink:hover {
+  border-color: rgba(255, 0, 85, 0.45);
+  box-shadow: 0 0 20px rgba(255, 0, 85, 0.12);
+}
+
+.cyber-panel-cyan:hover {
+  border-color: rgba(0, 240, 255, 0.45);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.12);
+}
+
+/* Neon text shadows */
+.neon-text-cyan {
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+}
+
+.neon-text-pink {
+  text-shadow: 0 0 8px rgba(255, 0, 85, 0.5);
+}
+
+/* Custom input styling */
+.cyber-input {
+  border: 1px solid rgba(128, 130, 152, 0.3);
+  background-color: rgba(5, 5, 11, 0.6);
+  color: var(--color-foreground);
+  transition: all 0.2s ease;
+}
+
+.cyber-input:focus {
+  border-color: var(--color-cyan);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.25);
+}
+
+.cyber-input-pink:focus {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 10px rgba(255, 0, 85, 0.25);
 }

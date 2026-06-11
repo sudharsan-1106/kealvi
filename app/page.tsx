@@ -1,4 +1,6 @@
-import QuestionsList from "./questions-list";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import HubContainer from "./hub-container";
 import { getQuestionsPage } from "@/lib/questions";
 
 // Render on every request (don't cache/prerender) so new questions show up.
@@ -8,21 +10,26 @@ const PAGE_SIZE = 10;
 
 // Server component — runs only on the server, awaits the data, renders to HTML.
 export default async function Page() {
-  const { questions, hasMore } = await getQuestionsPage(0, PAGE_SIZE);
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get("user_session");
+
+  if (!sessionCookie) {
+    redirect("/login");
+  }
+
+  let user;
+  try {
+    user = JSON.parse(sessionCookie.value);
+  } catch (e) {
+    redirect("/login");
+  }
+
+  // Pass user.id as voterId to get initial vote states
+  const { questions, hasMore } = await getQuestionsPage(0, PAGE_SIZE, user.id);
 
   return (
     <main className="mx-auto w-full max-w-2xl px-5 py-10 sm:py-14">
-      <header className="mb-7">
-        <span className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand">
-          <span className="h-1.5 w-1.5 rounded-full bg-brand" />
-          Live now
-        </span>
-        <h1 className="text-3xl font-semibold tracking-tight">Live Q&amp;A</h1>
-        <p className="mt-1.5 text-sm text-muted">
-          Ask a question, upvote the ones you want answered.
-        </p>
-      </header>
-      <QuestionsList initialQuestions={questions} initialHasMore={hasMore} />
+      <HubContainer user={user} initialQuestions={questions} initialHasMore={hasMore} />
     </main>
   );
 }

@@ -23,6 +23,7 @@ create table votes (
   id           uuid primary key default gen_random_uuid(),
   question_id  uuid not null references questions(id) on delete cascade,
   voter_id     text not null,
+  vote_type    text not null default 'up' check (vote_type in ('up', 'down')),
   created_at   timestamptz default now(),
   unique (question_id, voter_id)
 );
@@ -64,3 +65,36 @@ from (
     (24, 'How do I scale reads with replicas?', 'Ravi'),
     (25, 'What''s the best way to add auth later?', 'Priya')
 ) as seed(n, body, author);
+
+-- ── polls (Feature - Polls) ──────────────────────────────────────────────────
+create table if not exists polls (
+  id          uuid primary key default gen_random_uuid(),
+  question    text not null,
+  author      text,
+  created_at  timestamptz default now()
+);
+
+-- ── poll_options (Feature - Polls Options) ───────────────────────────────────
+create table if not exists poll_options (
+  id          uuid primary key default gen_random_uuid(),
+  poll_id     uuid not null references polls(id) on delete cascade,
+  option_text text not null,
+  created_at  timestamptz default now()
+);
+
+-- ── poll_votes (Feature - Polls Votes) ───────────────────────────────────────
+create table if not exists poll_votes (
+  id          uuid primary key default gen_random_uuid(),
+  poll_id     uuid not null references polls(id) on delete cascade,
+  option_id   uuid not null references poll_options(id) on delete cascade,
+  voter_id    text not null,
+  created_at  timestamptz default now(),
+  unique (poll_id, voter_id)
+);
+
+create index if not exists poll_options_poll_id_idx on poll_options (poll_id);
+create index if not exists poll_votes_poll_id_idx on poll_votes (poll_id);
+create index if not exists poll_votes_voter_id_idx on poll_votes (voter_id);
+
+-- ── Alter votes table for Q&A downvotes (in case the tables are already initialized) ─────────────────
+-- alter table votes add column if not exists vote_type text not null default 'up' check (vote_type in ('up', 'down'));
